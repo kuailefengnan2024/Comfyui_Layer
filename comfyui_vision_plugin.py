@@ -15,7 +15,6 @@
 # ==================================================================================
 
 import os
-import sys
 import base64
 import asyncio
 import mimetypes
@@ -28,7 +27,11 @@ from abc import ABC, abstractmethod
 from typing import Tuple, List, Dict, Any
 
 # ComfyUI aiohttp atexit hook
-import atexit
+# import atexit # No longer needed, clients are cached.
+
+# Global cache for API clients
+CLIENT_CACHE: Dict[str, Any] = {}
+
 # For ComfyUI, we need to be careful with asyncio event loops.
 # ComfyUI runs its own loop. We'll use a helper to run our async code.
 def run_async_in_sync(coro):
@@ -211,9 +214,9 @@ class DoubaoSeedVisionProvider(BaseVisionProvider):
             return None, "Image path is required for Doubao vision call."
 
         try:
-            # Note: Doubao's async call doesn't need to be in a separate thread like in the original code
-            # as we are already in an async context managed by run_async_in_sync.
-            base64_image = encode_image_to_base64_doubao(image_path)
+            # 使用 asyncio.to_thread 在单独的线程中运行同步的、会阻塞IO的图片编码函数
+            # 这可以防止在处理大文件时阻塞事件循环
+            base64_image = await asyncio.to_thread(encode_image_to_base64_doubao, image_path)
             
             messages = [
                 {
@@ -255,6 +258,19 @@ class DoubaoSeedVisionProvider(BaseVisionProvider):
 # ==================================================================================
 # III. COMFYUI 节点定义 (COMFYUI NODE DEFINITION)
 # ==================================================================================
+
+# 将配置定义为类级别的常量，方便修改
+class VisionAPIConfig:
+    # Gemini Pro Vision (Azure)
+    GEMINI_AZURE_ENDPOINT = "https://gemini-2-5-pro-vision.openai.azure.com/"
+    GEMINI_API_VERSION = "2024-05-01-preview"
+    GEMINI_DEPLOYMENT_NAME = "gpt-4o"
+    
+    # Doubao Seed Vision (Volcengine)
+    DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
+    DOUBAO_MODEL = "ep-20240621110657-p67m9"
+
+
 class VisionAPIPluginNode:
     def __init__(self):
         self.temp_dir = folder_paths.get_temp_directory()
@@ -306,47 +322,50 @@ class VisionAPIPluginNode:
         error = "An unknown error occurred."
 
         try:
-            if model_selection == "gemini-pro-vision":
-                if not api_key_gemini or "YOUR_AZURE_OPENAI_KEY" in api_key_gemini:
-                     return ("配置错误: Gemini API 密钥未设置。请在节点中输入您的 Azure OpenAI 密钥。",)
+            # 根据模型和API密钥生成缓存键
+            cache_key = f"{model_selection}_{api_key_gemini if model_selection == 'gemini-pro-vision' else api_key_doubao}"
+
+            # 检查缓存
+            if cache_key in CLIENT_CACHE:
+                client = CLIENT_CACHE[cache_key]
+            else:
+                # 如果不在缓存中，则创建新客户端
+                if model_selection == "gemini-pro-vision":
+                    if not api_key_gemini or "YOUR_AZURE_OPENAI_KEY" in api_key_gemini:
+                         return ("配置错误: Gemini API 密钥未设置。请在节点中输入您的 Azure OpenAI 密钥。",)
+                    
+                    try:
+                        client = Gemini25ProVisionProvider(
+                            api_key=api_key_gemini,
+                            azure_endpoint=VisionAPIConfig.GEMINI_AZURE_ENDPOINT,
+                            api_version=VisionAPIConfig.GEMINI_API_VERSION,
+                            deployment_name=VisionAPIConfig.GEMINI_DEPLOYMENT_NAME
+                        )
+                    except ValueError as e:
+                        return (f"Error initializing Gemini client: {e}",)
+
+                elif model_selection == "doubao-seed-vision":
+                    if not api_key_doubao or "YOUR_ARK_API_KEY" in api_key_doubao:
+                        return ("配置错误: 豆包 API 密钥未设置。请在节点中输入您的火山方舟（Ark）密钥。",)
+
+                    try:
+                        client = DoubaoSeedVisionProvider(
+                            api_key=api_key_doubao,
+                            base_url=VisionAPIConfig.DOUBAO_BASE_URL,
+                            model=VisionAPIConfig.DOUBAO_MODEL
+                        )
+                    except ValueError as e:
+                        return (f"Error initializing Doubao client: {e}",)
                 
-                # 硬编码的 Gemini 配置
-                azure_endpoint = "https://gemini-2-5-pro-vision.openai.azure.com/"
-                api_version = "2024-05-01-preview"
-                deployment_name = "gpt-4o"
-                
-                try:
-                    client = Gemini25ProVisionProvider(
-                        api_key=api_key_gemini,
-                        azure_endpoint=azure_endpoint,
-                        api_version=api_version,
-                        deployment_name=deployment_name
-                    )
-                except ValueError as e:
-                    return (f"Error initializing Gemini client: {e}",)
-
-            elif model_selection == "doubao-seed-vision":
-                if not api_key_doubao or "YOUR_ARK_API_KEY" in api_key_doubao:
-                    return ("配置错误: 豆包 API 密钥未设置。请在节点中输入您的火山方舟（Ark）密钥。",)
-
-                # 硬编码的豆包配置
-                base_url = "https://ark.cn-beijing.volces.com/api/v3"
-                model = "ep-20240621110657-p67m9"
-
-                try:
-                    client = DoubaoSeedVisionProvider(
-                        api_key=api_key_doubao,
-                        base_url=base_url,
-                        model=model
-                    )
-                except ValueError as e:
-                    return (f"Error initializing Doubao client: {e}",)
+                # 将新客户端存入缓存
+                if client:
+                    CLIENT_CACHE[cache_key] = client
             
             if client:
                 # Run the async call
                 content, error = run_async_in_sync(client.call_api(prompt, image_path=filepath))
-                # Clean up client resources
-                run_async_in_sync(client.close())
+                # 移除 close 调用，因为客户端现在被缓存和复用
+                # run_async_in_sync(client.close())
 
         finally:
             # Clean up temp file
@@ -357,4 +376,15 @@ class VisionAPIPluginNode:
             return (f"API Error: {error}",)
         
         return (content or "No content returned.",)
+
+# ==================================================================================
+# IV. COMFYUI 节点映射 (COMFYUI NODE MAPPINGS)
+# ==================================================================================
+NODE_CLASS_MAPPINGS = {
+    "VisionAPIPluginNode": VisionAPIPluginNode
+}
+
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "VisionAPIPluginNode": "Vision API Node"
+}
 
