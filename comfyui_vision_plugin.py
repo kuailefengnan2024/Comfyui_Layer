@@ -138,17 +138,20 @@ async def _fetch_and_encode_image_from_url(image_url: str) -> str | None:
         return None
 
 class Gemini25ProVisionProvider(BaseVisionProvider):
-    def __init__(self, api_key: str, azure_endpoint: str, api_version: str, deployment_name: str, **kwargs):
-        if not all([api_key, azure_endpoint, api_version, deployment_name]):
-            raise ValueError("For Gemini Pro Vision, API key, endpoint, API version, and deployment name are required.")
+    # 还原为与项目原始代码完全一致的 __init__ 签名和逻辑
+    def __init__(self, api_key: str, azure_endpoint: str, api_version: str, model: str, deployment_name: str | None = None, **kwargs):
+        if not all([api_key, azure_endpoint, api_version, model]):
+            raise ValueError("For Gemini Pro Vision, API key, endpoint, API version, and model name are required.")
         
-        self.deployment_name = deployment_name
+        self.model = model
+        self.deployment_name = deployment_name or model
+
         self.client = AsyncAzureOpenAI(
             api_key=api_key,
             azure_endpoint=azure_endpoint,
             api_version=api_version,
         )
-        print(f"[VisionAPIPluginNode] Gemini25ProVisionProvider initialized for deployment: {self.deployment_name}")
+        print(f"[VisionAPIPluginNode] Gemini25ProVisionProvider initialized for model: {self.model} (deployment: {self.deployment_name})")
 
     async def call_api(self, prompt_text: str, **kwargs) -> Tuple[str | None, str | None]:
         image_path = kwargs.get("image_path")
@@ -263,8 +266,8 @@ class DoubaoSeedVisionProvider(BaseVisionProvider):
 class VisionAPIConfig:
     # Gemini Pro Vision (Azure) - 从 settings.py 更新
     GEMINI_AZURE_ENDPOINT = "https://search-va.byteintl.net/gpt/openapi/online/v2/crawl"
-    GEMINI_API_VERSION = "2024-03-01-preview"  # 修正 API 版本
-    GEMINI_DEPLOYMENT_NAME = "gemini-2-5-pro"   # 修正模型/部署名称
+    GEMINI_API_VERSION = "2024-03-01-preview"
+    GEMINI_MODEL = "gemini-2-5-pro" # 使用 model 名称，与原始项目配置一致
     
     # Doubao Seed Vision (Volcengine) - 从 settings.py 更新
     DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
@@ -340,7 +343,7 @@ class VisionAPIPluginNode:
                             api_key=api_key_gemini,
                             azure_endpoint=VisionAPIConfig.GEMINI_AZURE_ENDPOINT,
                             api_version=VisionAPIConfig.GEMINI_API_VERSION,
-                            deployment_name=VisionAPIConfig.GEMINI_DEPLOYMENT_NAME
+                            model=VisionAPIConfig.GEMINI_MODEL # 模仿原始项目，传递 model 参数
                         )
                     except ValueError as e:
                         return (f"Error initializing Gemini client: {e}",)
