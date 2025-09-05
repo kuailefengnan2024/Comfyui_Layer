@@ -354,13 +354,3 @@ class VisionAPIPluginNode:
         
         return (content or "No content returned.",)
 
-# ==================================================================================
-# IV. 节点注册 (NODE REGISTRATION)
-# ==================================================================================
-NODE_CLASS_MAPPINGS = {
-    "VisionAPIPluginNode": VisionAPIPluginNode
-}
-
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "VisionAPIPluginNode": "Vision API Node"
-}
