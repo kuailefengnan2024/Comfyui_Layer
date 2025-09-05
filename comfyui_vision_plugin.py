@@ -263,8 +263,8 @@ class DoubaoSeedVisionProvider(BaseVisionProvider):
 class VisionAPIConfig:
     # Gemini Pro Vision (Azure) - 从 settings.py 更新
     GEMINI_AZURE_ENDPOINT = "https://search-va.byteintl.net/gpt/openapi/online/v2/crawl"
-    GEMINI_API_VERSION = "2024-05-01-preview"
-    GEMINI_DEPLOYMENT_NAME = "gpt-4o"  # 假设部署名不变，settings.py中用的是model名
+    GEMINI_API_VERSION = "2024-03-01-preview"  # 修正 API 版本
+    GEMINI_DEPLOYMENT_NAME = "gemini-2-5-pro"   # 修正模型/部署名称
     
     # Doubao Seed Vision (Volcengine) - 从 settings.py 更新
     DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
@@ -312,10 +312,11 @@ class VisionAPIPluginNode:
             
         pil_image = self.tensor_to_pil(image)
         
-        # Save temp image
-        filename = f"vision_api_temp_{uuid.uuid4()}.png"
+        # 将临时图片保存为JPEG格式，以匹配豆包API的要求
+        filename = f"vision_api_temp_{uuid.uuid4()}.jpeg"
         filepath = os.path.join(self.temp_dir, filename)
-        pil_image.save(filepath)
+        # 转换成RGB模式以兼容JPEG格式，然后保存
+        pil_image.convert('RGB').save(filepath, 'jpeg')
 
         client = None
         content = None
