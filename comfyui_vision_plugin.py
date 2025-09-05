@@ -268,17 +268,8 @@ class VisionAPIPluginNode:
                 "image": ("IMAGE",),
                 "prompt": ("STRING", {"multiline": True, "default": "Describe this image in detail."}),
                 "model_selection": (["gemini-pro-vision", "doubao-seed-vision"],),
-                
-                # Gemini (Azure) specific inputs
                 "api_key_gemini": ("STRING", {"multiline": False, "default": "YOUR_AZURE_OPENAI_KEY"}),
-                "azure_endpoint_gemini": ("STRING", {"multiline": False, "default": "https://your-endpoint.openai.azure.com/"}),
-                "api_version_gemini": ("STRING", {"multiline": False, "default": "2024-05-01-preview"}),
-                "deployment_name_gemini": ("STRING", {"multiline": False, "default": "gpt-4o"}),
-
-                # Doubao (VolcEngine) specific inputs
                 "api_key_doubao": ("STRING", {"multiline": False, "default": "YOUR_ARK_API_KEY"}),
-                "base_url_doubao": ("STRING", {"multiline": False, "default": "https://ark.cn-beijing.volces.com/api/v3"}),
-                "model_doubao": ("STRING", {"multiline": False, "default": "ep-20240621110657-p67m9"}),
             },
         }
 
@@ -301,8 +292,7 @@ class VisionAPIPluginNode:
         return Image.fromarray(image_np)
 
     def run(self, image, prompt, model_selection, 
-            api_key_gemini, azure_endpoint_gemini, api_version_gemini, deployment_name_gemini,
-            api_key_doubao, base_url_doubao, model_doubao):
+            api_key_gemini, api_key_doubao):
             
         pil_image = self.tensor_to_pil(image)
         
@@ -318,25 +308,36 @@ class VisionAPIPluginNode:
         try:
             if model_selection == "gemini-pro-vision":
                 if not api_key_gemini or "YOUR_AZURE_OPENAI_KEY" in api_key_gemini:
-                     return ("Error: Gemini API Key is not set.",)
+                     return ("配置错误: Gemini API 密钥未设置。请在节点中输入您的 Azure OpenAI 密钥。",)
+                
+                # 硬编码的 Gemini 配置
+                azure_endpoint = "https://gemini-2-5-pro-vision.openai.azure.com/"
+                api_version = "2024-05-01-preview"
+                deployment_name = "gpt-4o"
+                
                 try:
                     client = Gemini25ProVisionProvider(
                         api_key=api_key_gemini,
-                        azure_endpoint=azure_endpoint_gemini,
-                        api_version=api_version_gemini,
-                        deployment_name=deployment_name_gemini
+                        azure_endpoint=azure_endpoint,
+                        api_version=api_version,
+                        deployment_name=deployment_name
                     )
                 except ValueError as e:
                     return (f"Error initializing Gemini client: {e}",)
 
             elif model_selection == "doubao-seed-vision":
                 if not api_key_doubao or "YOUR_ARK_API_KEY" in api_key_doubao:
-                    return ("Error: Doubao API Key is not set.",)
+                    return ("配置错误: 豆包 API 密钥未设置。请在节点中输入您的火山方舟（Ark）密钥。",)
+
+                # 硬编码的豆包配置
+                base_url = "https://ark.cn-beijing.volces.com/api/v3"
+                model = "ep-20240621110657-p67m9"
+
                 try:
                     client = DoubaoSeedVisionProvider(
                         api_key=api_key_doubao,
-                        base_url=base_url_doubao,
-                        model=model_doubao
+                        base_url=base_url,
+                        model=model
                     )
                 except ValueError as e:
                     return (f"Error initializing Doubao client: {e}",)
