@@ -261,14 +261,14 @@ class DoubaoSeedVisionProvider(BaseVisionProvider):
 
 # 将配置定义为类级别的常量，方便修改
 class VisionAPIConfig:
-    # Gemini Pro Vision (Azure)
-    GEMINI_AZURE_ENDPOINT = "https://gemini-2-5-pro-vision.openai.azure.com/"
+    # Gemini Pro Vision (Azure) - 从 settings.py 更新
+    GEMINI_AZURE_ENDPOINT = "https://search-va.byteintl.net/gpt/openapi/online/v2/crawl"
     GEMINI_API_VERSION = "2024-05-01-preview"
-    GEMINI_DEPLOYMENT_NAME = "gpt-4o"
+    GEMINI_DEPLOYMENT_NAME = "gpt-4o"  # 假设部署名不变，settings.py中用的是model名
     
-    # Doubao Seed Vision (Volcengine)
+    # Doubao Seed Vision (Volcengine) - 从 settings.py 更新
     DOUBAO_BASE_URL = "https://ark.cn-beijing.volces.com/api/v3"
-    DOUBAO_MODEL = "ep-20240621110657-p67m9"
+    DOUBAO_MODEL = "doubao-seed-1-6-vision-250815"
 
 
 class VisionAPIPluginNode:
