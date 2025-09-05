@@ -288,11 +288,14 @@ class VisionAPIPluginNode:
     CATEGORY = "Vision"
 
     def tensor_to_pil(self, tensor):
-        """Converts a torch tensor (CHW, float32, 0-1) to a PIL Image (RGB)."""
+        """Converts a ComfyUI IMAGE tensor (Batch, Height, Width, Channel) to a PIL Image."""
         if tensor.ndim == 4:
-            tensor = tensor.squeeze(0) # Remove batch dimension if present
-        # Permute from CHW to HWC
-        image_np = tensor.permute(1, 2, 0).cpu().numpy()
+            tensor = tensor.squeeze(0)  # Remove batch dimension if present
+        
+        # The tensor from ComfyUI is already in HWC format (Height, Width, Channel).
+        # No permutation is needed.
+        image_np = tensor.cpu().numpy()
+        
         # Denormalize from 0-1 to 0-255 and convert to uint8
         image_np = (image_np * 255).astype(np.uint8)
         return Image.fromarray(image_np)
